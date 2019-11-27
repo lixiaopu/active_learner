@@ -15,6 +15,9 @@ Required Python packages:
 
 Note: Stabe-Baselines supports Tensorflow versions from 1.8.0 to 1.14.0. Support for Tensorflow 2 API is planned.
 
+### Install using pip
+- `pip install .`
+
 ## Example
 
 ```python
