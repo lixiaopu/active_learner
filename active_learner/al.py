@@ -69,7 +69,7 @@ class ActiveLearner(object):
     def __init__(self, id_num, task_param_name, task_min, task_max, algorithm, policy, nminibatches, max_reward,
                  reward_threshold,
                  policy_kwargs=None, need_vec_env=False):
-        # policy_kwargs={'net_arch': [8, ]}
+        # policy_kwargs={'net_arch': [8, dict(pi=[16, 16])]}
         self.init_path = ''
         self.path = ''
         self.id_num = id_num
@@ -252,12 +252,12 @@ class ActiveLearner(object):
         env.close()
         return model_params
 
-    def run_skill_model(self, env, kernel, learning_interval, task_range_sample, model_params):
+    def run_skill_model(self, env, sm_kernel, rm_kernel, learning_interval, task_range_sample, model_params):
         """predict next task parameter based on the current skill model"""
-        w = skill_model(kernel, task_range_sample, self.task_range, model_params)
+        w = skill_model(sm_kernel, task_range_sample, self.task_range, model_params)
         t, r_t = self.learning_rate_model(self.init_path, "Learning Curve")
         reward = self.evaluate_skill_model_from_weight(w, env)
-        r_pred, smooth_task_range, smooth_r_pred = reward_model(self.task_range, reward, kernel)
+        r_pred, smooth_task_range, smooth_r_pred = reward_model(self.task_range, reward, rm_kernel)
         current_pref = sum(r_pred)
         r_newpred = []
         for i in range(self.id_num):
@@ -276,7 +276,7 @@ class ActiveLearner(object):
         r_newpred[r_newpred > self.max_reward] = self.max_reward
         plt.figure()
         plt.ion()
-        index = update_reward_model(kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
+        index = update_reward_model(rm_kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
                                     smooth_r_pred, self.max_reward, self.reward_threshold)
         plt.ioff()
         plt.show(block=False)
@@ -284,12 +284,12 @@ class ActiveLearner(object):
         plt.close()
         return w, index, current_pref, r_pred
 
-    def run_skill_model_with_noise(self, env, kernel, learning_interval, task_range_sample, model_params, noise_coef):
+    def run_skill_model_with_noise(self, env, sm_kernel, rm_kernel, learning_interval, task_range_sample, model_params, noise_coef):
         """predict next task parameter based on the current skill model (evaluate skill model with noise)"""
-        w = skill_model(kernel, task_range_sample, self.task_range, model_params)
+        w = skill_model(sm_kernel, task_range_sample, self.task_range, model_params)
         t, r_t = self.learning_rate_model(self.init_path, "Learning Curve")
         weight, reward = self.evaluate_skill_model_with_noise(w, env, noise_coef)
-        r_pred, smooth_task_range, smooth_r_pred = reward_model(self.task_range, reward, kernel)
+        r_pred, smooth_task_range, smooth_r_pred = reward_model(self.task_range, reward, rm_kernel)
         current_pref = sum(r_pred)
         r_newpred = []
         for i in range(self.id_num):
@@ -308,7 +308,7 @@ class ActiveLearner(object):
         r_newpred[r_newpred > self.max_reward] = self.max_reward
         plt.figure()
         plt.ion()
-        index = update_reward_model(kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
+        index = update_reward_model(rm_kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
                                     smooth_r_pred, self.max_reward, self.reward_threshold)
         plt.ioff()
         plt.show(block=False)
@@ -340,7 +340,7 @@ class ActiveLearner(object):
             result.append(reward)
         return result
 
-    def run(self, env, init_task_index, kernel, path, init_learning_timesteps, learning_interval, noise_coef):
+    def run(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval, noise_coef):
         """run one active learning process"""
         perf = []
         tasks = [self.task_range[init_task_index]]
@@ -350,11 +350,11 @@ class ActiveLearner(object):
         model_params.append(model_params1)
         for i in range(100):
             print('---------active learning process ' + str(i + 1) + '---------')
-            w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, kernel, learning_interval,
+            w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, sm_kernel, rm_kernel, learning_interval,
                                                                                         tasks, model_params, noise_coef)
             perf.append(current_perf)
             print(perf)
-            if all(r > self.reward_threshold for r in r_pred):
+            if all(r > self.reward_threshold for r in r_pred) or i == 24:
                 print('Congratulations! Active learning finished at process ' + str(i))
                 self.save_skill_model(w, env)
                 '''
@@ -380,7 +380,7 @@ class ActiveLearner(object):
         result = self.evaluate_skill_model_from_file(env, need_render=True)
         return perf, result
 
-    def run_without_noise(self, env, init_task_index, kernel, path, init_learning_timesteps, learning_interval):
+    def run_without_noise(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
         """run one active learning process"""
         perf = []
         tasks = [self.task_range[init_task_index]]
@@ -390,11 +390,11 @@ class ActiveLearner(object):
         model_params.append(model_params1)
         for i in range(100):
             print('---------active learning process ' + str(i + 1) + '---------')
-            w, next_task_index1, current_perf, r_pred = self.run_skill_model(env, kernel, learning_interval,
+            w, next_task_index1, current_perf, r_pred = self.run_skill_model(env, sm_kernel, rm_kernel, learning_interval,
                                                                              tasks, model_params)
             perf.append(current_perf)
             print(perf)
-            if all(r > self.reward_threshold for r in r_pred):
+            if all(r > self.reward_threshold for r in r_pred) or i == 24:
                 print('Congratulations! Active learning finished at process ' + str(i))
                 self.save_skill_model(w, env)
                 '''
@@ -420,7 +420,7 @@ class ActiveLearner(object):
         result = self.evaluate_skill_model_from_file(env, need_render=True)
         return perf, result
 
-    def random_run(self, env, init_task_index, kernel, path, init_learning_timesteps, learning_interval, noise_coef):
+    def random_run(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
         """run one active learning process"""
         random_task = np.random.randint(5, size=25)
         print(random_task)
@@ -432,8 +432,8 @@ class ActiveLearner(object):
         model_params.append(model_params1)
         for i in range(25):
             print('---------active learning process ' + str(i + 1) + '---------')
-            w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, kernel, learning_interval,
-                                                                                        tasks, model_params, noise_coef)
+            w, next_task_index1, current_perf, r_pred = self.run_skill_model(env, sm_kernel, rm_kernel, learning_interval,
+                                                                                        tasks, model_params)
             perf.append(current_perf)
             print("random next task:" + str(random_task[i]))
             print(perf)
@@ -462,3 +462,4 @@ class ActiveLearner(object):
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
         return perf, result
+
