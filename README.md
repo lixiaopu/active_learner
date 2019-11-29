@@ -40,7 +40,7 @@ for i in task_params:
     env.append(gym.make('CartPole-v0', masspole=i))
 
 # active learning process
-model.run(env, init_task_index, RBF(1, (1, 1)), path, 100000, 10000, 0.01)
+model.run(env, 0, RBF(1, (1, 1)), RBF(1, (1, 1)), path+"1/", 50000, 10000, 0.01)
 ```
 
 ## Citing the Project
