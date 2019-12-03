@@ -66,7 +66,7 @@ class ActiveLearner(object):
     :param need_vec_env: (bool) Whether or not to use a vectorized environment
     """
 
-    def __init__(self, id_num, task_param_name, task_min, task_max, algorithm, policy, nminibatches, max_reward,
+    def __init__(self, id_num, task_param_name, task_min, task_max, algorithm, policy, max_reward,
                  reward_threshold,
                  policy_kwargs=None, need_vec_env=False):
         # policy_kwargs={'net_arch': [8, dict(pi=[16, 16])]}
@@ -79,7 +79,6 @@ class ActiveLearner(object):
         self.algorithm = algorithm
         self.policy = policy
         self.need_vec_env = need_vec_env
-        self.nminibatches = nminibatches
         self.max_reward = max_reward
         self.reward_threshold = reward_threshold
         self.policy_kwargs = policy_kwargs
@@ -181,8 +180,7 @@ class ActiveLearner(object):
         env = Monitor(env, self.init_path, allow_early_resets=True)
         if self.need_vec_env:
             env = DummyVecEnv([lambda: env])
-        model = self.algorithm(self.policy, env, verbose=0, policy_kwargs=self.policy_kwargs,
-                               nminibatches=self.nminibatches)
+        model = self.algorithm(self.policy, env, verbose=0, policy_kwargs=self.policy_kwargs)
         model.learn(total_timesteps=total_timesteps, callback=self.callback)
         # model.save(path + 'init_model.pkl')
         model_path = self.init_path + 'best_model.pkl'

@@ -30,7 +30,7 @@ from sklearn.gaussian_process.kernels import RBF
 import gym_al
 path = "/home/username/active_learner_model/"
 model = ActiveLearner(id_num=5, task_param_name='masspole', task_min=0.1, task_max=5, algorithm=PPO2,
-                      nminibatches=4, max_reward=200, reward_threshold=190, policy=MlpPolicy,
+                      max_reward=200, reward_threshold=190, policy=MlpPolicy,
                       policy_kwargs={'net_arch': [dict(pi=[32, 32])]}, need_vec_env=True)
 
 # contextual environments

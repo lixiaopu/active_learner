@@ -9,7 +9,7 @@ import gym_al
 path = "/home/lixiaopu/active_learner_model/test/"
 init_task_index = 4
 model = ActiveLearner(id_num=5, task_param_name='masspole', task_min=0.1, task_max=2, algorithm=PPO2,
-                      nminibatches=4, max_reward=200, reward_threshold=190, policy=MlpPolicy,
+                      max_reward=200, reward_threshold=190, policy=MlpPolicy,
                       policy_kwargs={'net_arch': [dict(pi=[32, 32])]}, need_vec_env=True)
 
 """contextual environments"""
