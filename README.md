@@ -68,21 +68,19 @@ for i in task_params:
 
 
 | #     | Figure   |  Description   |
-| :------------- | :-------------: | -------------: |
+| :------------- | :------------- | :------------- |
 | 1 | ![f1](figures/f1.png ) | Compare active and random learning with noise and without noise for 0.1-2-5-0 |
 | 2 | ![f2](figures/f2.png ) | Compare active and random learning with noise and without noise for 0.1-5-5-0 |
+| | The difference in skill performance is more significant when we update the skill with noise for task-0.1-2-5-0<br>In figure 1 and 2, we found a more significant difference in SP when task range increases.|
 | 3 | ![f3](figures/f3.png ) | Compare active learning with different initial task of 0.1-2-5 |
 | 4 | ![f4](figures/f4.png ) | Compare active learning with different initial task of 0.1-5-5 |
+| | In figure 3 and 4,<br>- similar performance<br>- starting from middle task have slightly better SP<br>- if starting from the task 4 is more difficult, it is not a good idea to start learning with it|
 | 5 | ![f5](figures/f5.png ) | Compare active learning with different task range |
+| | In figure 5, we found that we can learn faster when task range is small|
 | 6 | ![f6](figures/f6.png ) | Compare active learning with different kernel |
+| | In figure 6, we found the local model is better than a global model|
 | 7 | ![f7](figures/f7.png ) | Compare learning rate model with different task parameters |
+| | In figure 7, we compared learning rate model with masspole 0.1, 2.55, 5, and we found masspole 0.1 has the fastest learning rate |
 
-The difference in skill performance is more significant when we update the skill with noise for task-0.1-2-5-0
-From figure 1 and 2, we found a more significant difference in SP when task range increases.
-From figure 3 and 4,
-- similar performance
-- starting from middle task have slightly better SP
-- if starting from last task is more difficult, it is not a good idea to start learning with it
-From figure 5, we found that we can learn faster when task range is small.
-From figure 6, we found the local model is better for this task.
+
 ## Citing the Project
