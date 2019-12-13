@@ -26,12 +26,12 @@ def skill_model(kernel, task_params, task_range, model_params):
         for n in range(v[0].shape[0]):
             gp.fit(task_params, np.array(v).T[n])
             w_pred, sigma = gp.predict(task_range, return_std=True)
-            # if n == 1:
-                # plt.figure()
-                # plt.plot(task_range, w_pred, '-')
-                # plt.show()
+            #if n == 1:
+                #plt.figure()
+                #plt.plot(task_params, np.array(v).T[n],'r*')
+                #plt.plot(task_range, w_pred, '-')
+                #plt.show()
             new_w.append(w_pred)
-
     new_w = np.array(new_w).T
     new_w3 = []
     for m in range(task_range_num):

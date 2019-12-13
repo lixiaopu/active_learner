@@ -13,22 +13,24 @@ Required Python packages:
 - `gym` https://github.com/openai/gym/blob/master/README.rst
 - `numpy`
 - `scikit-learn`
+- `tensorflow` 
 
-Note: Stabe-Baselines supports Tensorflow versions from 1.8.0 to 1.14.0. Support for Tensorflow 2 API is planned.
+Note: Stabe-Baselines supports Tensorflow versions from 1.8.0 to 1.14.0. 
+You can install it with `pip install tensorflow==1.14.0`
 
 ### Install using pip
 - `pip install .`
 
 ## Example
-Here is a quick example of how to run ActiveLearner on a cartpole environment:
+Here is a quick example of how to run ActiveLearner on CartPoleAl-v2:
 ```python
+import gym
 from active_learner.al import ActiveLearner
 from stable_baselines import PPO2
 from stable_baselines.common.policies import MlpPolicy
-import gym
 from sklearn.gaussian_process.kernels import RBF
 import gym_al
-path = "/home/username/active_learner_model/"
+
 model = ActiveLearner(id_num=5, task_param_name='masspole', task_min=0.1, task_max=5, algorithm=PPO2,
                       max_reward=200, reward_threshold=190, policy=MlpPolicy,
                       policy_kwargs={'net_arch': [dict(pi=[32, 32])]}, need_vec_env=True)
@@ -40,17 +42,56 @@ for i in task_params:
     env.append(gym.make('CartPoleAl-v2', masspole=i))
 
 # active learning process
-model.run(env=env, init_task_index=0, sm_kernel=RBF(1, (1, 1)), rm_kernel=RBF(1, (1, 1)), path=path+"1/", 
+path = "/home/username/model/"
+model.run(env=env, init_task_index=0, sm_kernel=RBF(1, (1, 1)), rm_kernel=RBF(1, (1, 1)), path=path, 
           init_learning_timesteps=50000, learning_interval=10000, noise_coef=0.01)
 ```
+
+You also can run the test_al.py file with command `python3 test_al.py [path]`.
+
+The learned model will be saved in `[path]`.
+
+For example, run with `python3 test_al.py /home/yourusername/model/` (Don't forget to add '/' at the end).
+
 ## ActiveLearner Parameters
+
 ```
-class active_learner.al.ActiveLearner(id_num, task_param_name, task_min, task_max, algorithm, policy, nminibatches, max_reward,
+class active_learner.al.ActiveLearner(id_num, task_param_name, task_min, task_max, algorithm, policy, max_reward,
                  reward_threshold, policy_kwargs=None, need_vec_env=False)
 ```
+### Parameters
+- id_num: (int) The total number of tasks
+- task_param_name: (str) The name of the task variable
+- task_min: (float) The minimum task parameter
+- task_max: (float) The maximum task parameter
+- algorithm: (RLModel or str) The RL model to use (PPO2, DDPG, ...)
+- policy: (Policy or str) The policy model to use (MlpPolicy, CnnPolicy, ...)
+- max_reward: (int) The maximum reward that an episode can consist of
+- reward_threshold: (float) The reward threshold before all the tasks are considered solved
+- policy_kwargs: (dict) additional arguments to be passed to the policy on creation
+- need_vec_env: (bool) Whether or not to use a vectorized environment
+
+```
+run(env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval, noise_coef)
+```
+### Parameters
+- env: (list) Contextual environment
+- init_task_index: (int)
+- sm_kernel: (kernel object) The Gaussian Process Regression kernel of contextual skill model
+- rm_kernel: (kernel object) The Gaussian Process Regression kernel of reward model
+- path: (str) The saved path of the learned model
+- init_learning_timesteps: (int) The total initial time steps for training the initial task
+- learning_interval: (int) The time steps interval for training a task
+- noise_coef: (float) The coefficient of noise when evaluating the learned policy
+
+## Important hyper-parameters
+- initial guess for the learning rate function
+- max reward and reward thershold: run for the initial task, and observe the best acheivable reward; then select the max reward to be bigger than the best acheivable reward
+- reward model and skill model kernel parameters (RBF(a,(b,c)) in our case, a,b,c=1)
+https://scikit-learn.org/stable/modules/generated/sklearn.gaussian_process.kernels.RBF.html#sklearn.gaussian_process.kernels.RBF
 
 ## Gym_al
-Gym_al is a cartpole environment based on gym. We register a new cartpole environment "CartPoleAl-v2" which
+Gym_al is the active learning environment based on gym, including cartpole, pendulum and mountaincar. For example, we register a new cartpole environment "CartPoleAl-v2" and
 you can define your own environment with different pole masses by
 ```
 gym.make('CartPoleAl-v2', masspole=i)
@@ -66,6 +107,7 @@ for i in task_params:
 
 ## Results
 
+Here is the result in cartpole environment.
 
 | #     | Figure   |  Description   |
 | :------------- | :------------- | :------------- |
@@ -84,3 +126,14 @@ for i in task_params:
 
 
 ## Citing the Project
+```
+@misc{active-learner,
+  author = {Li, Xiaopu and Hazara, Murtaza and Kyrki Ville},
+  title = {Active Learner},
+  year = {2019},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/lixiaopu/active_learner}},
+}
+```
+

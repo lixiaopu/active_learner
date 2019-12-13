@@ -61,14 +61,13 @@ class ActiveLearner(object):
     :param algorithm: (RLModel or str) The RL model to use (PPO2, DDPG, ...)
     :param policy: (Policy or str) The policy model to use (MlpPolicy, CnnPolicy, ...)
     :param max_reward: (int) The maximum reward that an episode can consist of
-    :param reward_threshold: (float) The reward threshold before the task is considered solved
+    :param reward_threshold: (float) The reward threshold before all the tasks are considered solved
     :param policy_kwargs: (dict) additional arguments to be passed to the policy on creation
     :param need_vec_env: (bool) Whether or not to use a vectorized environment
     """
 
     def __init__(self, id_num, task_param_name, task_min, task_max, algorithm, policy, max_reward,
-                 reward_threshold,
-                 policy_kwargs=None, need_vec_env=False):
+                 reward_threshold, policy_kwargs=None, need_vec_env=False):
         # policy_kwargs={'net_arch': [8, dict(pi=[16, 16])]}
         self.init_path = ''
         self.path = ''
@@ -134,8 +133,9 @@ class ActiveLearner(object):
         model = self.algorithm.load(path)
         model_params = model.get_parameters()
         # print(dict((name, param.shape) for name, param in model_params.items()))
+        # if ("model/" in key or "/shared" in key)
         model_params = dict((key, value) for key, value in model_params.items()
-                            if ("/pi" in key or "/shared" in key))
+                            )
         return model_params
 
     def learning_rate_model(self, path, title):
@@ -146,25 +146,31 @@ class ActiveLearner(object):
         :param title: (str) the title of the task to plot
         """
         x, y = ts2xy(load_results(path), 'timesteps')
-        y = moving_average(y, window=20)
+        y = moving_average(y, window=50)
         # Truncate x
         x = x[len(x) - len(y):]
-        a, b, c = scipy.optimize.curve_fit(func1, x, y)[0]
-        x_fit = np.arange(0, np.max(x) + 100000)
+        try:
+            a, b, c = scipy.optimize.curve_fit(func1, x, y, p0=(10, -10, 10))[0]
+        except RuntimeError:
+            a, b, c = scipy.optimize.curve_fit(func1, x, y, p0=(-10, -10, 10))[0]
+        x_fit = np.arange(np.min(x), np.max(x) + 200000)
         y_fit = func1(x_fit, a, b, c)
         for i in range(len(y_fit)):
             if y_fit[i] > self.max_reward:
                 y_fit[i] = self.max_reward
-        plt.figure()
+
+        #plt.figure()
         plt.plot(x_fit, y_fit, '-', label='fit')
         plt.plot(x, y, '--', label='sample')
         plt.xlabel('Number of Timesteps')
         plt.ylabel('Rewards')
         plt.title(title + " Smoothed")
-        plt.legend(loc='best')
-        plt.show(block=False)
-        plt.pause(3)
-        plt.close()
+        #plt.legend(loc='best')
+        #plt.show()
+
+        #plt.show(block=False)
+        #plt.pause(3)
+        #plt.close()
         return x_fit, y_fit
 
     def initialization(self, env, total_timesteps, path):
@@ -191,31 +197,29 @@ class ActiveLearner(object):
     def evaluate_skill_model_from_weight(self, w, env, need_render=False):
         """load and evaluate skill model"""
         result = []
-        env_new = []
         if self.need_vec_env:
-            env_new = self.get_vec_envs(env)
+            env = self.get_vec_envs(env)
         for i in range(self.id_num):
-            model = self.algorithm(self.policy, env_new[i], verbose=0, policy_kwargs=self.policy_kwargs)
+            model = self.algorithm(self.policy, env[i], verbose=0, policy_kwargs=self.policy_kwargs)
             model.load_parameters(w[i], exact_match=False)
-            reward = evaluate(env_new[i], model, need_render)
+            reward = evaluate(env[i], model, need_render)
             print("Evaluate task %.2f: mean reward is %.2f" % (self.task_range[i], reward))
             result.append(reward)
         return result
 
     def evaluate_skill_model_with_noise(self, w, env, noise_coef, need_render=False):
         """load and evaluate skill model with noise from weight"""
-        env_new = []
         new_w = []
         new_r = []
         if self.need_vec_env:
-            env_new = self.get_vec_envs(env)
+            env = self.get_vec_envs(env)
         for i in range(self.id_num):
             result = []
-            model = self.algorithm(self.policy, env_new[i], verbose=0, policy_kwargs=self.policy_kwargs)
+            model = self.algorithm(self.policy, env[i], verbose=0, policy_kwargs=self.policy_kwargs)
             for j in range(10):
                 w0 = add_noise(w[i], noise_coef)
                 model.load_parameters(w0, exact_match=False)
-                reward = evaluate(env_new[i], model, need_render)
+                reward = evaluate(env[i], model, need_render)
                 result.append((w0, reward))
             top_candidates = sorted(result, key=lambda x: x[1], reverse=True)[:3]
             mean_params = dict(
@@ -250,6 +254,46 @@ class ActiveLearner(object):
         env.close()
         return model_params
 
+    def learn_from_file(self, env, path, learn_steps):
+        """return a trained model params for one task parameter"""
+        self.path = path + "learned_model_test/"
+        os.makedirs(self.path, exist_ok=True)
+        self.n_steps = 1
+        self.best_mean_reward = -np.inf
+        env = Monitor(env, self.path, allow_early_resets=True)
+        if self.need_vec_env:
+            env = DummyVecEnv([lambda: env])
+        model = self.algorithm.load(path + "init_model/best_model.pkl")
+        model.set_env(env)
+        model.learn(total_timesteps=learn_steps, callback=self.callback)
+        # os.remove(self.path + "monitor.csv")
+        # model.save(path + 'learned_model_' + str(index) + '.pkl')
+        # model_path = path + 'learned_model_' + str(index) + '.pkl'
+        model_path = self.path + 'best_model.pkl'
+        model_params = self.read_parameter(model_path)
+        del model
+        env.close()
+        return model_params
+
+    def get_weight_for_random_task(self, env, path, sm_kernel, task, need_render=False):
+        if self.need_vec_env:
+            env = DummyVecEnv([lambda: env])
+        model_params_set = []
+        for i in range(self.id_num):
+            model_params = self.read_parameter(path + "learned_model/" + 'env_' + str(i) + '_model.pkl')
+            model_params_set.append(model_params)
+        new_task_range = np.linspace(self.task_min,self.task_max,1000)
+        w = skill_model(sm_kernel, self.task_range, new_task_range, model_params_set)
+        for j in range(1000):
+            if task>new_task_range[j]:
+                task_w = w[j]
+                break
+        model = self.algorithm(self.policy, env, verbose=0, policy_kwargs=self.policy_kwargs)
+        model.load_parameters(task_w, exact_match=False)
+        reward = evaluate(env, model, need_render)
+        print(reward)
+        return task_w, reward
+
     def run_skill_model(self, env, sm_kernel, rm_kernel, learning_interval, task_range_sample, model_params):
         """predict next task parameter based on the current skill model"""
         w = skill_model(sm_kernel, task_range_sample, self.task_range, model_params)
@@ -260,7 +304,7 @@ class ActiveLearner(object):
         r_newpred = []
         for i in range(self.id_num):
             if r_t[-1] < r_pred[i]:
-                r_newpred.append(r_pred[i] + 0.1 * r_pred[i])
+                r_newpred.append(r_pred[i] + 0.1 * abs(r_pred[i]))
             else:
                 for j in t:
                     if r_t[j] >= r_pred[i]:
@@ -272,27 +316,27 @@ class ActiveLearner(object):
                         break
         r_newpred = np.array(r_newpred)
         r_newpred[r_newpred > self.max_reward] = self.max_reward
-        plt.figure()
-        plt.ion()
+        #plt.figure()
+        #plt.ion()
         index = update_reward_model(rm_kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
                                     smooth_r_pred, self.max_reward, self.reward_threshold)
-        plt.ioff()
-        plt.show(block=False)
-        plt.pause(1)
-        plt.close()
+        #plt.ioff()
+        #plt.show(block=False)
+        #plt.pause(1)
+        #plt.close()
         return w, index, current_pref, r_pred
 
     def run_skill_model_with_noise(self, env, sm_kernel, rm_kernel, learning_interval, task_range_sample, model_params, noise_coef):
         """predict next task parameter based on the current skill model (evaluate skill model with noise)"""
-        w = skill_model(sm_kernel, task_range_sample, self.task_range, model_params)
+        # w = skill_model(sm_kernel, task_range_sample, self.task_range, model_params)
         t, r_t = self.learning_rate_model(self.init_path, "Learning Curve")
-        weight, reward = self.evaluate_skill_model_with_noise(w, env, noise_coef)
+        weight, reward = self.evaluate_skill_model_with_noise(model_params, env, noise_coef)
         r_pred, smooth_task_range, smooth_r_pred = reward_model(self.task_range, reward, rm_kernel)
         current_pref = sum(r_pred)
         r_newpred = []
         for i in range(self.id_num):
             if r_t[-1] < r_pred[i]:
-                r_newpred.append(r_pred[i] + 0.1 * r_pred[i])
+                r_newpred.append(r_pred[i] + 0.1 * abs(r_pred[i]))
             else:
                 for j in t:
                     if r_t[j] >= r_pred[i]:
@@ -304,43 +348,107 @@ class ActiveLearner(object):
                         break
         r_newpred = np.array(r_newpred)
         r_newpred[r_newpred > self.max_reward] = self.max_reward
-        plt.figure()
-        plt.ion()
+        #plt.figure()
+        #plt.ion()
         index = update_reward_model(rm_kernel, self.task_range, r_pred, r_newpred, learning_interval, smooth_task_range,
                                     smooth_r_pred, self.max_reward, self.reward_threshold)
-        plt.ioff()
-        plt.show(block=False)
-        plt.pause(1)
-        plt.close()
+        #plt.ioff()
+        #plt.show(block=False)
+        #plt.pause(1)
+        #plt.close()
         return weight, index, current_pref, r_pred
 
     def save_skill_model(self, w, env):
         """save skill model with weight for each task parameter"""
-        env_new = []
         if self.need_vec_env:
-            env_new = self.get_vec_envs(env)
+            env = self.get_vec_envs(env)
         for i in range(self.id_num):
-            model = self.algorithm(self.policy, env_new[i], verbose=0, policy_kwargs=self.policy_kwargs)
+            model = self.algorithm(self.policy, env[i], verbose=0, policy_kwargs=self.policy_kwargs)
             model.load_parameters(w[i], exact_match=False)
             model.save(self.path + 'env_' + str(i) + '_model.pkl')
 
     def evaluate_skill_model_from_file(self, env, need_render=False):
         """load and evaluate skill model from file"""
         result = []
-        env_new = []
         if self.need_vec_env:
-            env_new = self.get_vec_envs(env)
+            env = self.get_vec_envs(env)
         for i in range(self.id_num):
             model = self.algorithm.load(self.path + 'env_' + str(i) + '_model.pkl')
-            reward = evaluate(env_new[i], model, need_render)
+            reward = evaluate(env[i], model, need_render)
             print("Evaluate task %d (%s %.2f): mean reward of 10 episodes is %.2f" % (i, self.task_param_name,
                                                                                       self.task_range[i], reward))
             result.append(reward)
         return result
 
+    def evaluate_one_model_from_file(self, env, path, need_render=False):
+        """load and evaluate skill model from file"""
+        result = []
+        if self.need_vec_env:
+            env = DummyVecEnv([lambda: env])
+        model = self.algorithm.load(path)
+        reward = evaluate(env, model, need_render)
+        print("mean reward of 10 episodes is %.2f" % reward)
+        result.append(reward)
+        return result
+
     def run(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval, noise_coef):
-        """run one active learning process"""
+        """
+        run one active learning process with noise but without skill model
+        TODO: do not call skill_model() in run_skill_model_with_noise() in line: 331
+        """
         perf = []
+        task_set = []
+        #tasks = [self.task_range[init_task_index]]
+        #model_params = []
+        model_params1 = self.initialization(env[init_task_index], total_timesteps=init_learning_timesteps,
+                                            path=path)
+        #model_params.append(model_params1)
+        model_params = [model_params1]*self.id_num
+        for i in range(100):
+            print('---------active learning process ' + str(i + 1) + '---------')
+            w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, sm_kernel, rm_kernel, learning_interval,
+                                                                                        self.task_range, model_params, noise_coef)
+            perf.append(current_perf)
+            task_set.append(next_task_index1)
+            print(perf)
+            print(task_set)
+            if all(r > self.reward_threshold for r in r_pred) or i == 24:
+                print('Congratulations! Active learning finished at process ' + str(i))
+                self.save_skill_model(w, env)
+                '''
+                plt.figure()
+                plt.title('Skill performance')
+                plt.plot(perf)
+                plt.xlabel('Active Learning Process')
+                plt.ylabel('Skill Performance')
+                plt.show()
+                '''
+                break
+            model_params3 = self.learn_from_weight(w[next_task_index1], env[next_task_index1], path,
+                                                   learning_interval)
+            '''
+            if self.task_range[next_task_index1] in tasks:
+                index = tasks.index(self.task_range[next_task_index1])
+                model_params[index] = model_params3
+            else:
+                tasks.append(self.task_range[next_task_index1])
+                model_params.append(model_params3)
+            '''
+            model_params[next_task_index1] = model_params3
+
+        result = self.evaluate_skill_model_from_file(env, need_render=True)
+	np.save(path + "al_sp.npy", perf)
+    	np.save(path + "al_rs.npy", result)
+    	np.save(path + "al_ts.npy", task_set)
+        return perf, result, task_set
+    
+    def run_al_with_sm(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval, noise_coef):
+        """
+        run one active learning process with skill model and noise
+        TODO: call skill_model() function in run_skill_model_with_noise() in line: 331
+        """
+        perf = []
+        task_set = []
         tasks = [self.task_range[init_task_index]]
         model_params = []
         model_params1 = self.initialization(env[init_task_index], total_timesteps=init_learning_timesteps,
@@ -351,7 +459,9 @@ class ActiveLearner(object):
             w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, sm_kernel, rm_kernel, learning_interval,
                                                                                         tasks, model_params, noise_coef)
             perf.append(current_perf)
+            task_set.append(next_task_index1)
             print(perf)
+            print(task_set)
             if all(r > self.reward_threshold for r in r_pred) or i == 24:
                 print('Congratulations! Active learning finished at process ' + str(i))
                 self.save_skill_model(w, env)
@@ -364,10 +474,9 @@ class ActiveLearner(object):
                 plt.show()
                 '''
                 break
-            # print('success')
-            # perf.append(current_perf)
             model_params3 = self.learn_from_weight(w[next_task_index1], env[next_task_index1], path,
                                                    learning_interval)
+
             if self.task_range[next_task_index1] in tasks:
                 index = tasks.index(self.task_range[next_task_index1])
                 model_params[index] = model_params3
@@ -376,22 +485,29 @@ class ActiveLearner(object):
                 model_params.append(model_params3)
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-        return perf, result
+	np.save(path + "al_sp.npy", perf)
+    	np.save(path + "al_rs.npy", result)
+    	np.save(path + "al_ts.npy", task_set)
+        return perf, result, task_set
 
     def run_without_noise(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
-        """run one active learning process"""
+        """run one active learning process without noise"""
         perf = []
+        task_set = []
         tasks = [self.task_range[init_task_index]]
         model_params = []
         model_params1 = self.initialization(env[init_task_index], total_timesteps=init_learning_timesteps,
                                             path=path)
-        model_params.append(model_params1)
+        #model_params.append(model_params1)
+        model_params = [model_params1] * self.id_num
         for i in range(100):
             print('---------active learning process ' + str(i + 1) + '---------')
             w, next_task_index1, current_perf, r_pred = self.run_skill_model(env, sm_kernel, rm_kernel, learning_interval,
-                                                                             tasks, model_params)
+                                                                             self.task_range, model_params)
             perf.append(current_perf)
+            task_set.append(next_task_index1)
             print(perf)
+            print(task_set)
             if all(r > self.reward_threshold for r in r_pred) or i == 24:
                 print('Congratulations! Active learning finished at process ' + str(i))
                 self.save_skill_model(w, env)
@@ -404,34 +520,38 @@ class ActiveLearner(object):
                 plt.show()
                 '''
                 break
-            # print('success')
-            # perf.append(current_perf)
             model_params3 = self.learn_from_weight(w[next_task_index1], env[next_task_index1], path,
                                                    learning_interval)
+            '''
             if self.task_range[next_task_index1] in tasks:
                 index = tasks.index(self.task_range[next_task_index1])
                 model_params[index] = model_params3
             else:
                 tasks.append(self.task_range[next_task_index1])
                 model_params.append(model_params3)
-
+            '''
+            model_params[next_task_index1] = model_params3
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-        return perf, result
+	np.save(path + "al_sp.npy", perf)
+    	np.save(path + "al_rs.npy", result)
+    	np.save(path + "al_ts.npy", task_set)
+        return perf, result, task_set
 
     def random_run(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
-        """run one active learning process"""
+        """run one random learning process with noise"""
         random_task = np.random.randint(5, size=25)
         print(random_task)
         perf = []
-        tasks = [self.task_range[init_task_index]]
-        model_params = []
+        # tasks = [self.task_range[init_task_index]]
+        # model_params = []
         model_params1 = self.initialization(env[init_task_index], total_timesteps=init_learning_timesteps,
                                             path=path)
-        model_params.append(model_params1)
+        # model_params.append(model_params1)
+        model_params = [model_params1] * self.id_num
         for i in range(25):
             print('---------active learning process ' + str(i + 1) + '---------')
-            w, next_task_index1, current_perf, r_pred = self.run_skill_model(env, sm_kernel, rm_kernel, learning_interval,
-                                                                                        tasks, model_params)
+            w, next_task_index1, current_perf, r_pred = self.run_skill_model_with_noise(env, sm_kernel, rm_kernel, learning_interval,
+                                                                                        self.task_range, model_params,0.01)
             perf.append(current_perf)
             print("random next task:" + str(random_task[i]))
             print(perf)
@@ -451,13 +571,19 @@ class ActiveLearner(object):
             # perf.append(current_perf)
             model_params3 = self.learn_from_weight(w[random_task[i]], env[random_task[i]], path,
                                                    learning_interval)
-            if self.task_range[random_task[i]] in tasks:
-                index = tasks.index(self.task_range[random_task[i]])
+            '''
+            if self.task_range[next_task_index1] in tasks:
+                index = tasks.index(self.task_range[next_task_index1])
                 model_params[index] = model_params3
             else:
-                tasks.append(self.task_range[random_task[i]])
+                tasks.append(self.task_range[next_task_index1])
                 model_params.append(model_params3)
+            '''
+            model_params[next_task_index1] = model_params3
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-        return perf, result
+	np.save(path + "al_sp.npy", perf)
+    	np.save(path + "al_rs.npy", result)
+    	np.save(path + "al_ts.npy", random_task)
+        return perf, result, random_task
 

@@ -14,11 +14,10 @@ def reward_model(task_range, reward, kernel):
     gp.fit(task_range, reward)
     r_pred, sigma1 = gp.predict(task_range, return_std=True)
     smooth_r_pred, sigma2 = gp.predict(smooth_task_range, return_std=True)
+    '''
     plt.figure()
     plt.plot(task_range, reward, 'b.', label='Observations')
-    # plt.plot(sl,r,color_dot,label = 'Observations',ms = 15)
     plt.plot(smooth_task_range, smooth_r_pred, 'b-', label='Prediction')
-    # plt.xlim(29,43)
     plt.title('Reward Model')
     plt.xlabel('Task Param')
     plt.ylabel('Reward')
@@ -26,6 +25,7 @@ def reward_model(task_range, reward, kernel):
     plt.show(block=False)
     plt.pause(1)
     plt.close()
+    '''
     return r_pred, smooth_task_range, smooth_r_pred
 
 
@@ -41,16 +41,18 @@ def update_reward_model(kernel, task_range_1, r_pred, r_newpred, learning_interv
     print('New prediction')
     r_integrate_set = []
     for i in range(task_num):
-        plt.clf()
+        #plt.clf()
         kernel = kernel
         # kernel = Dot(sigma_0=1.0, sigma_0_bounds=(0.1, 10.0))**2
         gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=9)
+        '''
         plt.plot(smooth_task_range, smooth_r_pred, 'b-', label='Prediction')
         plt.plot(task_range, r_newpred, 'b*', label='Prediction after ' + str(learning_interval) + ' timesteps')
         plt.xlabel('Task Param')
         plt.ylabel('Reward')
         plt.tick_params(labelsize=20)
         plt.title('Predicted Reward Model')
+        '''
         new_reward = [0 for i in range(task_num)]
         if abs(r_pred[i] - max_reward) < abs(max_reward - reward_threshold):
             new_reward = r_pred
@@ -67,14 +69,17 @@ def update_reward_model(kernel, task_range_1, r_pred, r_newpred, learning_interv
         r_pred1, sigma1 = gp.predict(task_range, return_std=True)
         smooth_r_pred1, sigma2 = gp.predict(smooth_task_range, return_std=True)
         # plt.ylim(0,200)
+        '''
         plt.plot(task_range[i], r_newpred[i], 'y*', ms=20, label='Next Task')
         plt.plot(smooth_task_range, smooth_r_pred1, 'r-', label=u'New Prediction')
         plt.legend(loc='lower center')
         plt.pause(1)
+        '''
         r_integrate = np.trapz(r_pred1)
         # r_integrate = np.trapz(smooth_r_pred1,smooth_task_range.ravel())
         r_integrate_set.append(r_integrate)
     print('next task:')
     print("env %d %.2f" % (np.argmax(r_integrate_set), task_range_1[np.argmax(r_integrate_set)]))
     return np.argmax(r_integrate_set)
+
 
