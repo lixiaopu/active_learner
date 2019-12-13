@@ -542,6 +542,7 @@ class ActiveLearner(object):
         random_task = np.random.randint(5, size=25)
         print(random_task)
         perf = []
+        task_set = []
         # tasks = [self.task_range[init_task_index]]
         # model_params = []
         model_params1 = self.initialization(env[init_task_index], total_timesteps=init_learning_timesteps,
@@ -554,7 +555,9 @@ class ActiveLearner(object):
                                                                                         self.task_range, model_params,0.01)
             perf.append(current_perf)
             print("random next task:" + str(random_task[i]))
+            task_set.append(random_task[i])
             print(perf)
+            print(task_set)
             if all(r > self.reward_threshold for r in r_pred) or i == 24:
                 print('Congratulations! Active learning finished at process ' + str(i))
                 self.save_skill_model(w, env)
@@ -584,6 +587,6 @@ class ActiveLearner(object):
         result = self.evaluate_skill_model_from_file(env, need_render=True)
         np.save(path + "al_sp.npy", perf)
         np.save(path + "al_rs.npy", result)
-        np.save(path + "al_ts.npy", random_task)
-        return perf, result, random_task
+        np.save(path + "al_ts.npy", task_set)
+        return perf, result, task_set
 
