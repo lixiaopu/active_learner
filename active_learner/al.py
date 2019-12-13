@@ -437,9 +437,9 @@ class ActiveLearner(object):
             model_params[next_task_index1] = model_params3
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-	np.save(path + "al_sp.npy", perf)
-    	np.save(path + "al_rs.npy", result)
-    	np.save(path + "al_ts.npy", task_set)
+        np.save(path + "al_sp.npy", perf)
+        np.save(path + "al_rs.npy", result)
+        np.save(path + "al_ts.npy", task_set)
         return perf, result, task_set
     
     def run_al_with_sm(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval, noise_coef):
@@ -485,9 +485,9 @@ class ActiveLearner(object):
                 model_params.append(model_params3)
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-	np.save(path + "al_sp.npy", perf)
-    	np.save(path + "al_rs.npy", result)
-    	np.save(path + "al_ts.npy", task_set)
+        np.save(path + "al_sp.npy", perf)
+        np.save(path + "al_rs.npy", result)
+        np.save(path + "al_ts.npy", task_set)
         return perf, result, task_set
 
     def run_without_noise(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
@@ -532,9 +532,9 @@ class ActiveLearner(object):
             '''
             model_params[next_task_index1] = model_params3
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-	np.save(path + "al_sp.npy", perf)
-    	np.save(path + "al_rs.npy", result)
-    	np.save(path + "al_ts.npy", task_set)
+        np.save(path + "al_sp.npy", perf)
+        np.save(path + "al_rs.npy", result)
+        np.save(path + "al_ts.npy", task_set)
         return perf, result, task_set
 
     def random_run(self, env, init_task_index, sm_kernel, rm_kernel, path, init_learning_timesteps, learning_interval):
@@ -582,8 +582,8 @@ class ActiveLearner(object):
             model_params[next_task_index1] = model_params3
 
         result = self.evaluate_skill_model_from_file(env, need_render=True)
-	np.save(path + "al_sp.npy", perf)
-    	np.save(path + "al_rs.npy", result)
-    	np.save(path + "al_ts.npy", random_task)
+        np.save(path + "al_sp.npy", perf)
+        np.save(path + "al_rs.npy", result)
+        np.save(path + "al_ts.npy", random_task)
         return perf, result, random_task
 
